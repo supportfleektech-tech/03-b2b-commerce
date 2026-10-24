@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  kraPin    String?  @map("kra_pin")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  memberships Membership[]
+  vendors      Vendor[]
+  products     Product[]
+  purchaseOrders PurchaseOrder[]
+  priceLists   PriceList[]
+  auditEvents  AuditEvent[]
+  apiKeys      ApiKey[]
+  @@map("organizations")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  memberships Membership[]
+  @@map("users")
+}
+
+model Membership {
+  id             String   @id @default(uuid())
+  user           User     @relation(fields: [userId], references: [id])
+  userId         String   @map("user_id")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@unique([userId, organizationId])
+  @@map("memberships")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Vendor {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  name           String
+  contact        String?
+  phone          String?
+  email          String?
+  terms          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  purchaseOrders PurchaseOrder[]
+  priceLists     PriceList[]
+  @@index([organizationId])
+  @@map("vendors")
+}
+
+model Product {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  sku            String
+  name           String
+  unitPriceCents Int      @map("unit_price_cents")
+  currency       String   @default("KES")
+  quantityOnHand Int      @default(0) @map("quantity_on_hand")
+  priceLists     PriceListItem[]
+  @@unique([organizationId, sku])
+  @@map("products")
+}
+
+model PriceList {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  vendor         Vendor   @relation(fields: [vendorId], references: [id])
+  vendorId       String   @map("vendor_id")
+  name           String
+  currency       String   @default("KES")
+  validUntil     DateTime? @map("valid_until")
+  items          PriceListItem[]
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id          String  @id @default(uuid())
+  priceList   PriceList @relation(fields: [priceListId], references: [id])
+  priceListId String  @map("price_list_id")
+  product     Product @relation(fields: [productId], references: [id])
+  productId   String  @map("product_id")
+  unitPriceCents Int @map("unit_price_cents")
+  minQty      Int     @default(1)
+  @@unique([priceListId, productId])
+  @@map("price_list_items")
+}
+
+model PurchaseOrder {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  vendor         Vendor   @relation(fields: [vendorId], references: [id])
+  vendorId       String   @map("vendor_id")
+  number         String
+  status         POStatus @default(DRAFT)
+  totalCents     Int      @map("total_cents")
+  currency       String   @default("KES")
+  items          Json
+  expectedAt     DateTime? @map("expected_at")
+  receivedAt     DateTime? @map("received_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@map("purchase_orders")
+}
+
+enum POStatus {
+  DRAFT
+  SENT
+  APPROVED
+  RECEIVED
+  RECONCILED
+  CANCELLED
+}
+
+model AuditEvent {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  actorId        String?  @map("actor_id")
+  action         String
+  entityType     String?  @map("entity_type")
+  entityId       String?  @map("entity_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  @@index([organizationId, createdAt])
+  @@map("audit_events")
+}
+
+model ApiKey {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String   @map("organization_id")
+  name           String
+  hashedKey      String   @map("hashed_key")
+  createdAt      DateTime @default(now()) @map("created_at")
+  revokedAt      DateTime? @map("revoked_at")
+  @@map("api_keys")
+}
